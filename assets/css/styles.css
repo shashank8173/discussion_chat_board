@@ -1,0 +1,257 @@
+body{
+    margin: 0;
+    font-family: Arial, sans-serif;
+}
+.dashboard {
+    display: flex;
+    height: 100vh;
+}
+.logo{
+    padding:2vw;
+}
+.sidebar {
+    width: 200px;
+    background-color: #ffffff;
+    color:#57606f;
+    box-shadow: rgba(9, 30, 66, 0.25) 0px 4px 8px -2px, rgba(9, 30, 66, 0.08) 0px 0px 0px 1px;
+}
+
+.sidebar ul {
+    list-style-type: none;
+    padding: 0;
+}
+
+.sidebar li {
+    padding: 15px 20px;
+    cursor: pointer;
+}
+
+.sidebar li:hover,
+.sidebar li.active {
+    background-color: #ccd2dc;
+    cursor: pointer;
+}
+
+.content {
+    flex-grow: 1;
+    padding: 20px;
+}
+
+.content-page {
+    display: none;
+}
+
+.content-page.active {
+    display: block;
+}
+
+.logout{
+    float: bottom;
+    box-shadow: rgba(9, 30, 66, 0.25) 0px 4px 8px -2px, rgba(9, 30, 66, 0.08) 0px 0px 0px 1px;
+}
+/* ****************/
+.home{
+    overflow-x:scroll;
+}
+.containers{
+ display:flex;
+ flex-direction: row;
+ gap:1%;
+ padding-top:2vw;
+ padding-right:4vw;
+}
+.box{
+    width: 100%;
+    background-color: rgb(21, 140, 225);
+    color: white;
+    text-align: center;
+    padding:2vw;
+}
+.uploades{
+    display: flex;
+    justify-content: right;
+    padding-top:2vw;
+}
+.btn{
+    background-color:rgb(103, 162, 20);
+    padding: 1vw;
+    border: none;
+    box-shadow: rgba(9, 30, 66, 0.25) 0px 4px 8px -2px, rgba(9, 30, 66, 0.08) 0px 0px 0px 1px;
+    color:white;
+    cursor: pointer;
+}
+
+/* *********************gap*************** */
+.gapbtn2vw{
+    padding-bottom: 2vw;
+}
+/* **********table*********************/
+
+table {
+    width: 100%;
+    border-collapse: collapse !important;
+}
+
+th, td {
+    border: 1px solid #000 !important;
+    padding:1vw !important;
+    text-align: left;
+}
+/* Scrollable table container with both vertical and horizontal scrolling */
+.table-container {
+    max-width: 100%; /* Allows the table to take full width until it overflows */
+    max-height: 400px; /* Fixed height, you can adjust it */
+    overflow-y: auto; /* Enables vertical scrolling */
+    overflow-x: auto; /* Enables horizontal scrolling */
+    border: 1px solid #ddd; /* Optional border around the table container */
+}
+
+/* Makes the table cells adapt on smaller screens */
+@media (max-width: 600px) {
+    th, td {
+        font-size: 14px;
+        padding: 8px;
+    }
+}
+
+/* Custom button style */
+.custom-upload {
+    display: inline-block;
+    padding: 10px 20px;
+    background-color: rgb(103, 162, 20);
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    border: none;
+    border-radius: 5px;
+}
+
+.custom-upload:hover {
+    background-color: rgb(103, 162, 20);
+}
+
+/* Hide the actual file input */
+/* input[type="file"] {
+    display: none;
+} */
+.custom-upload {
+    display: inline-block;
+    padding: 10px 20px;
+    background-color: rgb(103, 162, 20);
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    border: none;
+    border-radius: 5px;
+}
+
+.custom-upload:hover {
+    background-color: rgb(103, 162, 20);
+}
+
+th {
+    background-color: rgb(21, 140, 225);
+    color: white;
+}
+
+td:nth-child(12) {
+    width: 200px; /* Adjust the width for the last column */
+}
+
+tr:nth-child(even) {
+    background-color: rgb(176, 220, 237);
+}
+
+tr:nth-child(odd) {
+    background-color: #e0f7fa !important; /* Very light blue */
+}
+.lowerbutton{
+    display: flex;
+    flex-direction: row;
+    justify-content: right;
+    gap:1%
+}
+.table-container{
+    display: flex;
+    overflow: scroll;
+}
+thead {
+    position: -webkit-sticky; /* For Safari */
+    position: sticky;
+    top: 0; /* Stick the header to the top of the table container */
+    z-index: 1; /* Ensure header is on top of table content */
+}
+
+
+
+/* ****************************itembsm************************************/
+.items-row {
+        display: flex;
+        justify-content: space-around;
+        margin: 20px;
+    }
+
+    .itembsm {
+        border: 1px solid #ccc;
+        padding: 10px;
+        margin: 5px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+        text-align: center;
+    }
+
+    .itembsm.active {
+        background-color: rgb(103, 162, 20);
+        border-color: #000;
+    }
+
+    .content-area {
+        margin: 20px 0;
+    }
+
+    .contentbsm {
+        display: none;
+        /* padding: 10px; */
+        /* background-color: #f0f0f0;
+        border: 1px solid #ccc; */
+    }
+
+    /* Display contentbsm1 by default */
+    #contentbsm1 {
+        display: block;
+    }
+    .logoutbutton{
+        background-color:rgb(21, 140, 225);
+        width: 100%;
+        padding: 10px;
+        color: #fff;
+        margin-left: 10px;
+        text-transform: uppercase;
+        text-decoration: none;
+    }
+    .logoutbutton:hover{
+        background-color:greenyellow;
+        color:black;
+    }
+    /* .showaftervist{
+        display: none;
+        padding: 10px;
+    }
+    .logoutbutton:hover{
+        .showaftervist{
+            display: block;
+        }
+    } */
+
+    .uploaditesms{
+        display:flex;
+        justify-content: center;
+        align-items: center;
+        margin:10px;
+        width:100%;
+        float: right;
+        gap:10px;
+    }
+    /* .uploadeitems:last-child {
+        float: right;
+    } */

@@ -1,0 +1,181 @@
+<?php 
+session_start();
+if(!isset($_SESSION["user"])){
+    header("Location:login.php");
+    exit(); // Ensure script termination after redirection
+}
+require 'vendor/autoload.php'; // Load PhpSpreadsheet using Composer
+use PhpOffice\PhpSpreadsheet\IOFactory;
+
+// Database connection settings
+$host = 'localhost';
+$dbname = 'bsm_dashboard';
+$username = 'root';
+$password = '';
+
+$conn = new mysqli($host, $username, $password, $dbname);
+if ($conn->connect_error) {
+    die("Connection failed: " . $conn->connect_error);
+}
+
+// Step 1: Fetch unique po_numbers from `excel_table` that don't exist in `po_table`
+$fetchUniqueQuery = "
+    SELECT e.po_number
+    FROM excel_table e
+    LEFT JOIN po_table p ON e.po_number = p.po_number
+    WHERE p.po_number IS NULL
+    GROUP BY e.po_number
+";
+$result = $conn->query($fetchUniqueQuery);
+
+if ($result->num_rows > 0) {
+    while ($uniqueRow = $result->fetch_assoc()) {
+        $po_number = $uniqueRow['po_number'];
+        
+        // Step 2: Fetch all items related to this po_number from `excel_table`
+        $fetchItemsQuery = "
+            SELECT `Item Code`, `Quantity`, `MRP`, `Margin %`, `Total Amount`
+            FROM excel_table
+            WHERE po_number = ?
+        ";
+        $stmtItems = $conn->prepare($fetchItemsQuery);
+        $stmtItems->bind_param("s", $po_number);
+        $stmtItems->execute();
+        $itemsResult = $stmtItems->get_result();
+        
+        $fill_rate_stack = 0;
+        $totalAmount = 0;
+        $all_items_processed = true;
+        
+        // Process each item for the current po_number
+        while ($itemRow = $itemsResult->fetch_assoc()) {
+            $itemcode = $itemRow['Item Code'];
+            $ordered_quantity = $itemRow['Quantity'];
+            $mrp = $itemRow['MRP'];
+            $margin = $itemRow['Margin %'];
+            $totalAmount += $itemRow['Total Amount'];
+            
+            // Fetch available quantity from `stack_available`
+            $availableQuery = "SELECT quantity, mrp, margin FROM stack_available WHERE itemcode = ?";
+            $stmtAvailable = $conn->prepare($availableQuery);
+            $stmtAvailable->bind_param("s", $itemcode);
+            $stmtAvailable->execute();
+            $availableResult = $stmtAvailable->get_result();
+            
+            if ($availableResult->num_rows > 0) {
+                while($availableRow = $availableResult->fetch_assoc()){
+                    $available_quantity = $availableRow['quantity'];
+                    $fixed_mrp = $availableRow['mrp'];
+                    $fixed_margin = $availableRow['margin'];
+                    
+                    if ($available_quantity > 0) {
+                        // Calculate the PO value for available quantity
+                        $po_value = $available_quantity * $fixed_mrp * (1 - ($fixed_margin / 100));
+                        $fill_rate_stack += $po_value;
+                    } else {
+                        $all_items_processed = false; // Set flag if any item has zero quantity
+                    }
+                    
+                    // Update available quantity in `stack_available`
+                    $new_quantity = max(0, $available_quantity - $ordered_quantity);
+                    $updateAvailableQuery = "UPDATE stack_available SET quantity = ? WHERE itemcode = ?";
+                    $stmtUpdate = $conn->prepare($updateAvailableQuery);
+                    $stmtUpdate->bind_param("is", $new_quantity, $itemcode);
+                    $stmtUpdate->execute();
+                    $stmtUpdate->close();
+                }
+            } else {
+                // No available stock for this itemcode
+                $all_items_processed = false;
+            }
+            $stmtAvailable->close();
+        }
+        $stmtItems->close();
+        
+        // Determine the fc_location based on the first four digits of po_number
+        $firstFourDigits = substr($po_number, 0, 4);
+        $location = '';
+        switch ($firstFourDigits) {
+            case '1256':
+                $location = 'Farukhnagar';
+                break;
+            case '1177':
+                $location = 'Dasna2';
+                break;
+            case '1336':
+                $location = 'Gurgaon G7';
+                break;
+            case '2575':
+                $location = 'Dasna3';
+                break;
+            case '2866':
+                $location = 'Noida N1';
+                break;
+            default:
+                $location = 'Unknown';
+        }
+        
+        // Assign variables for insertion
+        $updatestack_fill_rate = $fill_rate_stack;
+        $updated_totalAmount = $totalAmount;
+        $updated_location = $location;
+        
+        // Calculate fill rate with corrected formula
+        if ($updated_totalAmount > 0) {
+            $fill_rate = ($updatestack_fill_rate / $updated_totalAmount) * 100;
+            
+            // Cap fill rate at 100%
+            if ($fill_rate > 100) {
+                $fill_rate = 100;
+            }
+        } else {
+            $fill_rate = 0; // Handle zero ordered amount
+            echo "Warning: Total Amount is zero for PO Number: $po_number. Fill rate set to 0.<br>";
+        }
+        
+        echo "PO Number: " . htmlspecialchars($po_number) . "<br>";
+        echo "Fill Rate: " . number_format($fill_rate, 2) . "%<br>";
+        echo "Total Amount: " . htmlspecialchars($updated_totalAmount) . "<br>";
+        
+        // Determine account
+        $account = (strlen($po_number) == 13) ? 'Blinkit' : '';
+        
+        // Insert into po_table using prepared statement
+        $insertQuery = "
+            INSERT INTO po_table 
+                (account, po_number, po_date, po_expiry_date, earliest_appt, fc_location, status, po_values, fill_rate, suggested_appt_date, appointment) 
+            VALUES 
+                (?, ?, CURDATE(), NULL, NULL, ?, NULL, ?, ?, NULL, NULL)
+        ";
+        $stmtInsert = $conn->prepare($insertQuery);
+        $stmtInsert->bind_param("sssdi", $account, $po_number, $updated_location, $updated_totalAmount, $fill_rate);
+        
+        if ($stmtInsert->execute()) {
+            echo "Data inserted successfully for PO Number: $po_number with fill rate: " . number_format($fill_rate, 2) . "%<br><br>";
+        } else {
+            echo "Error inserting data for PO Number: $po_number: " . $stmtInsert->error . "<br><br>";
+        }
+        $stmtInsert->close();
+    }
+} else {
+    echo "No new records found in `excel_table`.<br>";
+}
+
+// Fetch data from `stack_available` for display (if needed)
+$sql_items = "SELECT * FROM stack_available";
+$result_items = $conn->query($sql_items);
+
+// Fetch data from `po_table` for display
+$sql_updated = "SELECT id, account, po_number, po_date, po_expiry_date, earliest_appt, fc_location, status, po_values, fill_rate, suggested_appt_date, appointment FROM po_table";
+$result_updated = $conn->query($sql_updated);
+
+// Fetch data from `scheduled` for display
+$sql_scheduled = "SELECT id, account, po_number, po_date, po_expiry_date, earliest_appt, fc_location, status, po_values, invoice_value, turn_around_time, appointment FROM scheduled";
+$result_scheduled = $conn->query($sql_scheduled);
+
+// Fetch username(s) from `users` table (assuming multiple users)
+$sql_username = "SELECT fullname FROM users";
+$result_username = $conn->query($sql_username);
+
+$conn->close();
+?>

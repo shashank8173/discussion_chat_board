@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Upload & Cartoon Effect</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .container {
+            display: flex;
+            justify-content: space-around;
+        }
+        .section {
+            border: 1px solid #ccc;
+            padding: 20px;
+            width: 45%;
+            text-align: center;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+        }
+        .upload-btn {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Image Upload and Cartoon Effect</h1>
+    <div class="container">
+        <!-- Section 1: Original Image Upload -->
+        <div class="section" id="upload-section">
+            <h2>Upload Image</h2>
+            <input type="file" id="imageUpload" accept="image/*">
+            <div>
+                <img id="uploadedImage" alt="Your Image will appear here" style="display:none;">
+            </div>
+        </div>
+
+        <!-- Section 2: Cartoon Effect and Download -->
+        <div class="section" id="cartoon-section">
+            <h2>Cartoon Version</h2>
+            <canvas id="cartoonCanvas" style="display:none;"></canvas>
+            <div>
+                <button id="downloadBtn" style="display:none;">Download Cartoon</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const imageUpload = document.getElementById('imageUpload');
+        const uploadedImage = document.getElementById('uploadedImage');
+        const cartoonCanvas = document.getElementById('cartoonCanvas');
+        const downloadBtn = document.getElementById('downloadBtn');
+
+        // Handle image upload
+        imageUpload.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    uploadedImage.src = e.target.result;
+                    uploadedImage.style.display = 'block';
+                    applyCartoonEffect(e.target.result);
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Function to apply cartoon effect (simulated)
+        function applyCartoonEffect(imageSrc) {
+            const img = new Image();
+            img.src = imageSrc;
+            img.onload = function() {
+                const ctx = cartoonCanvas.getContext('2d');
+                cartoonCanvas.width = img.width;
+                cartoonCanvas.height = img.height;
+                cartoonCanvas.style.display = 'block';
+
+                // Draw the image to the canvas and apply a simple cartoon-like effect (just an example)
+                ctx.drawImage(img, 0, 0, img.width, img.height);
+                // Simulate cartoon effect by applying basic posterize filter
+                let imageData = ctx.getImageData(0, 0, img.width, img.height);
+                let data = imageData.data;
+                for (let i = 0; i < data.length; i += 4) {
+                    data[i] = Math.floor(data[i] / 50) * 50;       // Red
+                    data[i + 1] = Math.floor(data[i + 1] / 50) * 50; // Green
+                    data[i + 2] = Math.floor(data[i + 2] / 50) * 50; // Blue
+                }
+                ctx.putImageData(imageData, 0, 0);
+                downloadBtn.style.display = 'block';
+            };
+        }
+
+        // Handle cartoon image download
+        downloadBtn.addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.href = cartoonCanvas.toDataURL();
+            link.download = 'cartoon-version.png';
+            link.click();
+        });
+    </script>
+</body>
+</html>
