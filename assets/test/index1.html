@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Toggle Content</title>
+    <style>
+     body {
+        font-family: Arial, sans-serif;
+    }
+
+    .items-row {
+        display: flex;
+        justify-content: space-around;
+        margin: 20px;
+    }
+
+    .itembsm {
+        border: 1px solid #ccc;
+        padding: 10px;
+        margin: 5px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+    }
+
+    .itembsm.active {
+        background-color: #87CEFA;
+        border-color: #000;
+    }
+
+    .content-area {
+        margin: 20px 0;
+    }
+
+    .contentbsm {
+        display: none;
+        padding: 10px;
+        background-color: #f0f0f0;
+        border: 1px solid #ccc;
+    }
+
+    /* Display contentbsm1 by default */
+    #contentbsm1 {
+        display: block;
+    }
+
+    </style>
+</head>
+<body>
+    <div class="items-row">
+        <div class="itembsm active" id="itembsm1">
+            <h2>Item 1</h2>
+        </div>
+        <div class="itembsm" id="itembsm2">
+            <h2>Item 2</h2>
+        </div>
+        <div class="itembsm" id="itembsm3">
+            <h2>Item 3</h2>
+        </div>
+        <div class="itembsm" id="itembsm4">
+            <h2>Item 4</h2>
+        </div>
+        <div class="itembsm" id="itembsm5">
+            <h2>Item 5</h2>
+        </div>
+    </div>
+    <div class="content-area" id="content-area">
+        <p class="contentbsm" id="contentbsm1">This is the content of Item 1.</p>
+        <p class="contentbsm" id="contentbsm2">This is the content of Item 2.</p>
+        <p class="contentbsm" id="contentbsm3">This is the content of Item 3.</p>
+        <p class="contentbsm" id="contentbsm4">This is the content of Item 4.</p>
+        <p class="contentbsm" id="contentbsm5">This is the content of Item 5.</p>
+    </div>
+
+    <script>
+     // Get all itembsm elements
+    const itembsmElements = document.querySelectorAll('.itembsm');
+    // Get all contentbsm elements
+    const contentbsmElements = document.querySelectorAll('.contentbsm');
+
+    // Function to handle the click and show/hide content
+    function showContent(event) {
+        // Remove active class from all itembsm elements
+        itembsmElements.forEach(itembsm => itembsm.classList.remove('active'));
+
+        // Hide all contentbsm sections
+        contentbsmElements.forEach(contentbsm => contentbsm.style.display = 'none');
+
+        // Add active class to the clicked itembsm
+        const clickedItembsm = event.currentTarget;
+        clickedItembsm.classList.add('active');
+
+        // Get the corresponding contentbsm based on the clicked itembsm's ID
+        const contentbsmId = clickedItembsm.id.replace('itembsm', 'contentbsm');
+        const contentbsmToShow = document.getElementById(contentbsmId);
+        contentbsmToShow.style.display = 'block';
+    }
+
+    // Add click event listeners to each itembsm
+    itembsmElements.forEach(itembsm => {
+        itembsm.addEventListener('click', showContent);
+    });
+
+    </script>
+</body>
+</html>

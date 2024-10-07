@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+ <meta charset="UTF-8">
+ <title>BMS Dashboard</title>
+ <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+
+<body>
+ <div class="dashboard">
+  <div class="sidebar">
+   <div class="logo">
+    <image src="assets/images/image.png" alt="log"></image>
+   </div>
+   <div class="left-items">
+    <ul>
+     <li data-content="home" class="active">PO Summary</li>
+     <li data-content="profile">Company wise view</li>
+     <li data-content="settings">Reports</li>
+     <!-- <li data-content="messages">Messages</li> -->
+     <li data-content="logout">Logout</li>
+    </ul>
+   </div>
+  </div>
+  <div class="content">
+   <div class="containers">
+    <div class="box">
+     <h5>Total PO Received (MTD)</h5>
+    </div>
+    <div class="box">
+     <h5>Total PO Delivered (MTD)</h5>
+    </div>
+    <div class="box">
+     <h5>Total PO Pending (MTD)</h5>
+    </div>
+    <div class="box">
+     <h5>Fill Rate %</h5>
+    </div>
+   </div>
+   <div id="home" class="content-page active">
+    <div class="uploades">
+        <label class="custom-upload" for="uploadExcel">+ Upload New</label>
+    <input type="file" id="uploadExcel" accept=".xlsx, .xls" />
+    <br><br>
+       </div>
+       <div class="gapbtn2vw"></div>
+    <div class="tables-home">
+        <div class="table-container">
+            <table id="excelTable">
+                <thead>
+                    <tr id="tableHeader"></tr>
+                     <tr></tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
+       </div>
+       <div class="gapbtn2vw"></div>
+   <div class="lowerbutton">
+    <button class="btn">save</button>
+    <button class="btn">Run Appointment System</button>
+
+   </div>
+   </div>
+   <div id="profile" class="content-page">
+    <h1>Company wise view</h1>
+    <p></p>
+   </div>
+   <div id="settings" class="content-page">
+    <h1>Reports</h1>
+    <p></p>
+   </div>
+   <!-- <div id="messages" class="content-page">
+    <h1>Messages</h1>
+    <p>Check your messages here.</p>
+   </div> -->
+   <div id="logout" class="content-page">
+    <h1>Logout</h1>
+    <p>You have been logged out.</p>
+   </div>
+  </div>
+ </div>
+ <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+ <script src="assets/js/scripts.js"></script>
+</body>
+
+</html>
+
+
+<div class="uploades">
+    <form action="upload.php" method="POST" enctype="multipart/form-data">
+        <input type="text" name="ponumber" placeholder="PO Number" required>
+        <input type="file" name="excelFile" accept=".xls, .xlsx" required>
+        <button type="submit" class="custom-upload">+ Upload New</button>
+    </form>
+    <br><br>
+    <!-- <form action="download_pdf.php" method="POST">
+        <button type="submit">Download Data as PDF</button>
+    </form> -->
+    <form action="download_excel.php" method="POST">
+        <button class="btn" type="submit">Download</button>
+    </form>
+</div>
+<div class="gapbtn2vw"></div>
+<div class="tables-home">
+    <div class="table-container">
+        <table>
+            <tr>
+                <th>ID</th>
+                <th>PO Date</th>
+                <th>PO Expiry Date</th>
+                <th>PO Number</th>
+                <th>PC</th>
+                <th>Location</th>
+                <th>Status</th>
+                <th>Invoice Value</th>
+                <th>Delivery TAT</th>
+                <th>Fill Rate</th>
+                <th>Appointment</th>
+            </tr>
+            <?php
+            // Fetch and display rows from the updated result set
+            if ($result_updated->num_rows > 0) {
+                while ($row = $result_updated->fetch_assoc()) {
+                    echo "<tr>
+                        <td>" . $row["id"] . "</td>
+                        <td>" . $row["po_date"] . "</td>
+                        <td>" . $row["po_expiry_date"] . "</td>
+                        <td>" . $row["po_number"] . "</td>
+                        <td>" . $row["pc"] . "</td>
+                        <td>" . $row["location"] . "</td>
+                        <td>" . $row["status"] . "</td>
+                        <td>" . $row["invoice_value"] . "</td>
+                        <td>" . $row["delivery_tat"] . "</td>
+                        <td>" . $row["fill_rate"] . "</td>
+                        <td>" . $row["appointment"] . "</td>
+                      </tr>";
+                }
+            } else {
+                echo "<tr><td colspan='11'>No records found</td></tr>";
+            }
+            ?>
+        </table>
+    </div>
+</div>
+<div class="gapbtn2vw"></div>
+<div class="lowerbutton">
+    <button class="btn">Save</button>
+    <button class="btn">Run Appointment System</button>
+</div>

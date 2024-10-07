@@ -1,11 +1,14 @@
-<?php
+<?php 
 session_start();
-if (!isset($_SESSION["user"])) {
+if(!isset($_SESSION["user"])){
     header("Location:login.php");
-    exit(); 
 }
-require 'vendor/autoload.php'; 
+?>
+<?php
+require 'vendor/autoload.php'; // Load PhpSpreadsheet using Composer
 use PhpOffice\PhpSpreadsheet\IOFactory;
+
+// Database connection settings
 $host = 'localhost';
 $dbname = 'bsm_dashboard';
 $username = 'root';
@@ -16,79 +19,47 @@ if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
 }
 
-// Step 1: Fetch unique po_numbers from `excel_table` that don't exist in `po_table`
+// Step 1: Fetch data from `excel_table`
+// Step 1: Fetch unique data from `excel_table` that doesn't exist in `po_table`
 $fetchUniqueQuery = "
-    SELECT e.po_number
+    SELECT e.*
     FROM excel_table e
     LEFT JOIN po_table p ON e.po_number = p.po_number
     WHERE p.po_number IS NULL
-    GROUP BY e.po_number
 ";
+
+
 $result = $conn->query($fetchUniqueQuery);
 
 if ($result->num_rows > 0) {
-    while ($uniqueRow = $result->fetch_assoc()) {
-        $po_number = $uniqueRow['po_number'];
+    while ($row = $result->fetch_assoc()) {
+        $po_number = $row['po_number']; // Adjust column name as needed
+        $itemcode = $row['Item Code'];  // Fetch itemcode from `excel_table`
+        $ordered_quantity = $row['Quantity'];  // Fetch ordered quantity
+        $totalAmount = $row['Total Amount']; // Access the aliased column here
+         
 
-        // Step 2: Fetch all items related to this po_number from `excel_table`
-        $fetchItemsQuery = "
-            SELECT `Item Code`, `Quantity`, `MRP`, `Margin %`, `Total Amount`
-            FROM excel_table
-            WHERE po_number = ?
-        ";
-        $stmtItems = $conn->prepare($fetchItemsQuery);
-        $stmtItems->bind_param("s", $po_number);
-        $stmtItems->execute();
-        $itemsResult = $stmtItems->get_result();
-
-        $fill_rate_stack = 0;
-        $totalAmount = 0;
-        $all_items_processed = true;
-
-        // Process each item for the current po_number
-        while ($itemRow = $itemsResult->fetch_assoc()) {
-            $itemcode = $itemRow['Item Code'];
-            $ordered_quantity = $itemRow['Quantity'];
-            $mrp = $itemRow['MRP'];
-            $margin = $itemRow['Margin %'];
-            $totalAmount = $itemRow['Total Amount'];
-
-            // Fetch available quantity from `stack_available`
-            $availableQuery = "SELECT quantity, mrp, margin FROM stack_available WHERE itemcode = ?";
-            $stmtAvailable = $conn->prepare($availableQuery);
-            $stmtAvailable->bind_param("s", $itemcode);
-            $stmtAvailable->execute();
-            $availableResult = $stmtAvailable->get_result();
-
-            if ($availableResult->num_rows > 0) {
-                while ($availableRow = $availableResult->fetch_assoc()) {
-                    $available_quantity = $availableRow['quantity'];
-                    $fixed_mrp = $availableRow['mrp'];
-                    $fixed_margin = $availableRow['margin'];
-
-                    if ($available_quantity > 0) {
-                        // Calculate the PO value for available quantity
-                        $po_value = $available_quantity * $fixed_mrp * (1 - ($fixed_margin / 100));
-                        $fill_rate_stack += $po_value;
-                    } else {
-                        $all_items_processed = false; // Set flag if any item has zero quantity
-                    }
-
-                    // Update available quantity in `stack_available`
-                    $new_quantity = max(0, $available_quantity - $ordered_quantity);
-                    $updateAvailableQuery = "UPDATE stack_available SET quantity = ? WHERE itemcode = ?";
-                    $stmtUpdate = $conn->prepare($updateAvailableQuery);
-                    $stmtUpdate->bind_param("is", $new_quantity, $itemcode);
-                    $stmtUpdate->execute();
-                    $stmtUpdate->close();
-                }
-            } else {
-                // No available stock for this itemcode
-                $all_items_processed = false;
-            }
-            $stmtAvailable->close();
-        }
-        $stmtItems->close();
+          // Step 2: Check available quantity in `stack_available`
+          $availableQuery = "SELECT quantity FROM stack_available WHERE itemcode = '$itemcode'";
+          $availableResult = $conn->query($availableQuery);
+          $fill_rate = 0;  // Default fill rate
+  
+          if ($availableResult->num_rows > 0) {
+              $availableRow = $availableResult->fetch_assoc();
+              $available_quantity = $availableRow['quantity'];
+  
+              // Step 3: Calculate fill rate
+              if ($available_quantity >= $ordered_quantity) {
+                  $fill_rate = 100;
+              } else {
+                  $fill_rate = ($available_quantity / $ordered_quantity) * 100;
+              }
+  
+              // Update available quantity in `stack_available`
+              $new_quantity = max(0, $available_quantity - $ordered_quantity);
+              $updateAvailableQuery = "UPDATE stack_available SET quantity = $new_quantity WHERE itemcode = '$itemcode'";
+              $conn->query($updateAvailableQuery);
+          }
 
         // Determine the fc_location based on the first four digits of po_number
         $firstFourDigits = substr($po_number, 0, 4);
@@ -109,67 +80,45 @@ if ($result->num_rows > 0) {
             case '2866':
                 $location = 'Noida N1';
                 break;
-            default:
-                $location = 'Unknown';
         }
 
-        // Assign variables for insertion
-        $updatestack_fill_rate = $fill_rate_stack;
-        $updated_totalAmount = $totalAmount;
-        $updated_location = $location;
-
-        // Calculate fill rate with safeguard
-        if ($updatestack_fill_rate > 0) {
-            $fill_rate = ($updated_totalAmount / $updatestack_fill_rate) * 100;
-        } else {
-            $fill_rate = 0;
-            echo "Warning: Fill rate stack is zero for PO Number: $po_number. Fill rate set to 0.<br>";
-        }
-
-        // echo "PO Number: " . htmlspecialchars($po_number) . "<br>";
-        // echo "Fill Rate: " . number_format($fill_rate, 2) . "%<br>";
-        // echo "Total Amount: " . htmlspecialchars($updated_totalAmount) . "<br>";
-
+        // Insert data into `po_table`
         $account = (strlen($po_number) == 13) ? 'Blinkit' : '';
-
-        $insertQuery = "
-            INSERT INTO po_table 
-                (account, po_number, po_date, po_expiry_date, earliest_appt, fc_location, status, po_values, fill_rate, suggested_appt_date, appointment) 
-            VALUES 
-                (?, ?, CURDATE(), NULL, NULL, ?, NULL, ?, ?, NULL, NULL)
-        ";
-        $stmtInsert = $conn->prepare($insertQuery);
-        $stmtInsert->bind_param("sssdi", $account, $po_number, $updated_location, $updated_totalAmount, $fill_rate);
-
-        if ($stmtInsert->execute()) {
-            echo "Data inserted successfully for PO Number: $po_number with fill rate: " . number_format($fill_rate, 2) . "%<br><br>";
-        } else {
-            echo "Error inserting data for PO Number: $po_number: " . $stmtInsert->error . "<br><br>";
+        $insertQuery = "INSERT INTO po_table (account, po_number, po_date, po_expiry_date, earliest_appt, fc_location, status, po_values, fill_rate, suggested_appt_date, appointment)
+                        VALUES ('$account', '$po_number', CURDATE(), NULL, NULL, '$location', NULL, '$totalAmount', '$fill_rate', NULL, NULL)";
+        if ($conn->query($insertQuery) === FALSE) {
+            echo "Error inserting data: " . $conn->error;
         }
-        $stmtInsert->close();
+        else{
+            echo "Data inserted successfully with fill rate: $fill_rate<br>";
+        }
     }
 } else {
-    echo "No new records found in `excel_table`.<br>";
+    // echo "No new records found in `excel_table`.";
+    
 }
 
-$sql_items = "SELECT * FROM stack_available";
-$result_items = $conn->query($sql_items);
+                $sql_items = "SELECT * FROM stack_available";
+                $result_items = $conn->query($sql_items);
+               
 
+// Fetch data from `po_table` for display
 $sql_updated = "SELECT id, account, po_number, po_date, po_expiry_date, earliest_appt, fc_location, status, po_values, fill_rate, suggested_appt_date, appointment FROM po_table";
 $result_updated = $conn->query($sql_updated);
 
-$sql_scheduled = "SELECT id, account, po_number, po_date, po_expiry_date, earliest_appt, fc_location, status, po_values, invoice_value, turn_around_time, appointment FROM scheduled";
+// Fetch data from `scheduled` for display
+
+$sql_scheduled = "SELECT id, account, po_number, po_date, po_expiry_date, earliest_appt, fc_location, status, po_values,invoice_value,turn_around_time, appointment FROM scheduled";
 $result_scheduled = $conn->query($sql_scheduled);
 
-$sql_delivered = "SELECT id, account, po_number, po_date, po_expiry_date, earliest_appt, fc_location, status, po_values, invoice_value, turn_around_time, appointment FROM delivered";
+// Fetch data from `delivered` for display
+
+$sql_delivered = "SELECT id, account, po_number, po_date, po_expiry_date, earliest_appt, fc_location, status, po_values,invoice_value,turn_around_time, appointment FROM delivered";
 $result_delivered = $conn->query($sql_delivered);
-
-$sql_username = "SELECT fullname FROM users";
-$result_username = $conn->query($sql_username);
-
+$username="SELECT fullname from users";
+$result_username = $conn->query($username);
 $conn->close();
 ?>
-
 
 <!DOCTYPE html>
 <html lang="en">
@@ -189,7 +138,7 @@ $conn->close();
                 <img src="assets/images/image.png" alt="log">
             </div>
             <div class="left-items">
-
+               
                 <ul>
                     <li data-content="home" class="active">PO Summary</li>
                     <li data-content="profile">Inventory</li>
@@ -283,7 +232,7 @@ $conn->close();
                                     </thead>
                                     <tbody>
                                         <?php
-                                        
+                                        // Fetch and display rows from the updated result set
                                         if ($result_updated->num_rows > 0) {
                                             while ($row = $result_updated->fetch_assoc()) {
                                                 echo "<tr>
@@ -329,23 +278,23 @@ $conn->close();
                             <div class="table-container">
                                 <table>
                                     <thead>
-                                        <tr>
-                                            <th>ID</th>
-                                            <th>Account</th>
-                                            <th>PO Number</th>
-                                            <th>PO Date</th>
-                                            <th>PO Expiry Date</th>
-                                            <th>Earliest Appointment</th>
-                                            <th>FC Location</th>
-                                            <th>Status</th>
-                                            <th>PO Value</th>
-                                            <th>Invoice Value</th>
-                                            <th>Turn Around Time(IN DAYS)</th>
-                                            <th>Appointment</th>
-                                        </tr>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Account</th>
+                                        <th>PO Number</th>
+                                        <th>PO Date</th>
+                                        <th>PO Expiry Date</th>
+                                        <th>Earliest Appointment</th>
+                                        <th>FC Location</th>
+                                        <th>Status</th>
+                                        <th>PO Value</th>
+                                        <th>Invoice Value</th>
+                                        <th>Turn Around Time(IN DAYS)</th>
+                                        <th>Appointment</th>
+                                    </tr>
                                     </thead>
                                     <?php
-                                    
+                                    // Fetch and display rows from the updated result set
                                     if ($result_scheduled->num_rows > 0) {
                                         while ($row = $result_scheduled->fetch_assoc()) {
                                             echo "<tr>
@@ -383,24 +332,24 @@ $conn->close();
                         <div class="tables-home">
                             <div class="table-container">
                                 <table>
-                                    <thead>
-                                        <tr>
-                                            <th>ID</th>
-                                            <th>Account</th>
-                                            <th>PO Number</th>
-                                            <th>PO Date</th>
-                                            <th>PO Expiry Date</th>
-                                            <th>Earliest Appointment</th>
-                                            <th>FC Location</th>
-                                            <th>Status</th>
-                                            <th>PO Value</th>
-                                            <th>Invoice Value</th>
-                                            <th>Turn Around Time(IN DAYS)</th>
-                                            <th>Appointment</th>
-                                        </tr>
-                                    </thead>
+                                <thead>
+                                <tr>
+                                        <th>ID</th>
+                                        <th>Account</th>
+                                        <th>PO Number</th>
+                                        <th>PO Date</th>
+                                        <th>PO Expiry Date</th>
+                                        <th>Earliest Appointment</th>
+                                        <th>FC Location</th>
+                                        <th>Status</th>
+                                        <th>PO Value</th>
+                                        <th>Invoice Value</th>
+                                        <th>Turn Around Time(IN DAYS)</th>
+                                        <th>Appointment</th>
+                                    </tr>
+                                </thead>
                                     <?php
-                                    
+                                    // Fetch and display rows from the updated result set
                                     if ($result_delivered->num_rows > 0) {
                                         while ($row = $result_delivered->fetch_assoc()) {
                                             echo "<tr>
@@ -429,35 +378,27 @@ $conn->close();
                 </div>
             </div>
             <div id="profile" class="content-page">
-                <div class="container my-5">
-                    <h2>Available Product In Inventory</h2>
-                   
-
-                    <div class="uploaditesms">
-                     <div><a class="btn btn-primary" href="create.php" role="button">Add New Product</a></div> 
-                     <div><form action="uploaditems.php" method="post" enctype="multipart/form-data">
-                            <input type="file" name="excel_file" accept=".xlsx, .xls">
-                            <input type="submit" value="Upload New Item Sheet">
-                        </form></div>
-                    </div>
-                    <br>
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Item Code</th>
-                                <th>Product Description</th>
-                                <th>Quantity</th>
-                                <th>MRP</th>
-                                <th>Margin(%)</th>
-                                <th>Operations</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php
-                            if ($result_items->num_rows > 0) {
-                                while ($row = $result_items->fetch_assoc()) {
-                                    echo "
+            <div class="container my-5">
+        <h2>Available Product In Inventory</h2>
+        <a class="btn btn-primary" href="create.php" role="button">Add New Product</a>
+        <br>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Item Code</th>
+                    <th>Product Description</th>
+                    <th>Quantity</th>
+                    <th>MRP</th>
+                    <th>Margin(%)</th>
+                    <th>Operations</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php
+                if($result_items->num_rows >0){
+                    while ($row = $result_items->fetch_assoc()) {
+                        echo "
                          <tr>
                             <td>{$row['id']}</td>
                             <td>{$row['itemcode']}</td>
@@ -472,13 +413,13 @@ $conn->close();
                             </td>
                          </tr>
                          ";
-                                }
-                            }
-                            ?>
-
-                        </tbody>
-                    </table>
-                </div>
+                    }
+                }
+                ?>
+               
+            </tbody>
+        </table>
+    </div>
             </div>
             <div id="settings" class="content-page">
                 <h1>Reports</h1>
@@ -491,34 +432,34 @@ $conn->close();
     </div>
     <script src="assets/js/scripts.js"></script>
     <script>
-        function updateInvoiceValue(event, id, invoiceValue) {
-            if (event.keyCode === 13) { 
-                var xhr = new XMLHttpRequest();
-                xhr.open("POST", "update_invoice.php", true);  
-                xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
-                xhr.onreadystatechange = function () {
-                    if (xhr.readyState == 4 && xhr.status == 200) {
-                        var response = xhr.responseText;
-                       
-                        document.getElementById("invoice-value-" + id).innerText = invoiceValue; 
-                    }
-                };
-                xhr.send("id=" + id + "&invoice_value=" + invoiceValue);  
+     function updateInvoiceValue(event, id, invoiceValue) {
+    if (event.keyCode === 13) {  // If Enter key is pressed
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", "update_invoice.php", true);  // Assuming update_invoice.php processes the update
+        xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState == 4 && xhr.status == 200) {
+                var response = xhr.responseText;
+                // Instead of alerting, update the invoice value on the page dynamically
+                document.getElementById("invoice-value-" + id).innerText = invoiceValue; // Assuming you have a span or div with id `invoice-value-<id>`
             }
-        }
+        };
+        xhr.send("id=" + id + "&invoice_value=" + invoiceValue);  // Send ID and updated invoice value to the server
+    }
+}
 
 
         function updateStatus(id, newStatus) {
             $.ajax({
-                url: 'update_status.php',  
+                url: 'update_status.php',  // The PHP file to handle the request
                 type: 'POST',
                 data: {
                     id: id,
                     status: newStatus
                 },
                 success: function (response) {
-                    alert(response);  
-                    location.reload(); 
+                    alert(response);  // Show a success message
+                    location.reload(); // Reload the page to reflect the changes
                 },
                 error: function () {
                     alert("An error occurred while updating the status.");
